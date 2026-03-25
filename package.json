@@ -1,0 +1,23 @@
+{
+  "name": "zadaca",
+  "version": "1.0.0",
+  "description": "RWA projekt",
+  "main": "server.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs podaci/konfiguracija.csv",
+    "compile": "npx tsc"
+  },
+  "author": "pcrncic22",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "@types/sqlite3": "^3.1.11",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "sqlite3": "^6.0.1"
+  }
+}

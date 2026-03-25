@@ -1,0 +1,13 @@
+node_modules/
+
+*.sqlite
+*.db
+
+konfiguracija.csv
+.env
+
+build/
+dist/
+
+.DS_Store
+Thumbs.db
