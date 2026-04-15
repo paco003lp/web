@@ -1,13 +1,13 @@
 import express from 'express';
-import { readFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { Konfigurator } from './build/zajednicko/konfiguracija.js';
 import { BazaKlijent } from './build/servis/bazaKlijent.js';
 import {TmdbKlijent} from './build/servis/tmdbKlijent.js'
-import { error } from 'console';
+import path from 'path';
 
 const server = express();
 const putanjaKonfiguracije = process.argv[2];
-
+const __dirname = path.resolve();
 
 if (!putanjaKonfiguracije || !existsSync(putanjaKonfiguracije)) {
     console.error("Pogreška: Niste proslijedili ispravnu putanju do konfiguracije!");
@@ -27,11 +27,6 @@ try {
     console.log("TMDB API ključ uspješno učitan.");
     tmdb = new TmdbKlijent(tmdbKljuc);
 
-
-   /* const tmdbKljuc = "8edb4fa33acbd647160a5da1b7b968fb"; 
-    console.log("TESTIRAM RUČNI KLJUČ: [" + tmdbKljuc + "]");
-    tmdb = new TmdbKlijent(tmdbKljuc);
-*/
 } catch (greška) {
     console.error("Problem s konfiguracijom:", greška.message);
     process.exit(1);
@@ -41,11 +36,20 @@ const putanjaBaze = `./podaci/RWA2024pcrncic22.sqlite`;
 const baza = new BazaKlijent(putanjaBaze);
 const port = process.argv[3] || 12345; 
 
+server.use(express.static("javno"));
+server.use(express.json());
 
-server.use("/dokumentacija", express.static("./dokumentacija"));
+server.use((zahtjev,odgovor,next)=>{
+    const sql = "INSERT INTO dnevnik(metoda, putanja) VALUES (?, ?)";
+    baza.izvrsiUpit(sql,[zahtjev.method, zahtjev.url])
+    .catch(err => console.error("Dnevnik greška: ", err));
+    next();
+})
+
+server.use("/dokumentacija", express.static(path.resolve(process.cwd(),"dokumentacija")));
 
 server.get("/", (zahtjev, odgovor) => {
-    odgovor.sendFile(process.cwd() + "/index.html");
+    odgovor.sendFile(path.resolve(process.cwd(),"javno","index.html"));
 });
 
 server.get("/api/korisnici", (zahtjev, odgovor)=>{
@@ -59,17 +63,27 @@ server.get("/api/korisnici", (zahtjev, odgovor)=>{
     })
 });
 
-server.get("/api/tmdb/zanrovi", async(zahtjev,odgovor)=>{
+server.get("/api/zanr",async(zahtjev,odgovor)=>{
     try{
-        const zanrovi = await tmdb.dohvatiZanrove();
-        odgovor.json(zanrovi);
+    let mojiZanrovi= await baza.izvrsiUpit("SELECT * FROM zanr", []);
+
+    if (mojiZanrovi.length === 0){
+        console.log("Baza je prazna, dohvacam zanrove s TMDBa");
+        const tmdbZanrovi = await tmdb.dohvatiZanrove();
+
+        for(let z of tmdbZanrovi){
+            await baza.izvrsiUpit("INSERT INTO zanr (id, naziv) VALUES (?,?)", [z.id, z.name]);
+        }
+        mojiZanrovi = await baza.izvrsiUpit("SELECT * FROM zanr", []);
+    }
+    odgovor.json(mojiZanrovi);
     }catch(g){
-        console.error("Detalji:", g);
-        odgovor.status(500).json({greska: "Neuspjeh dohvata s TMDB"});
+        console.error("Greska kod zanrova: ",g);
+        odgovor.status(500).json({greska: "Neuspjeh rada s zanrovima"});
     }
 })
 
-server.get("/api/tmdb/filmovi",async(zahtjev,odgovor)=>{
+server.get("/api/tmdb/film",async(zahtjev,odgovor)=>{
     try{
         const upit = (zahtjev.query.upit || "").toString().trim();
         const stranica = Number.parseInt((zahtjev.query.stranica || "1").toString(),10);
@@ -89,10 +103,9 @@ server.get("/api/tmdb/filmovi",async(zahtjev,odgovor)=>{
         odgovor.status(500).json({greska: "Neuspjeh pretrage filmova na TMDBu"})
     }
 })
-
-server.get("/api/filmovi",(zahtjev,odgovor)=>{
+/*
+server.get("/api/film",(zahtjev,odgovor)=>{
     const sql = "SELECT * FROM film";
-
     baza.izvrsiUpit(sql,[])
     .then((podaci)=>{
         odgovor.json(podaci);
@@ -100,7 +113,9 @@ server.get("/api/filmovi",(zahtjev,odgovor)=>{
     .catch((greska)=>{
         odgovor.status(500).json({greska: greska.message});
     })
-})
+})*/
+
+
 
 server.post("/api/korisnici", (zahtjev,odgovor)=>{
     const noviKorisnik = zahtjev.body;
@@ -126,17 +141,30 @@ server.post("/api/korisnici", (zahtjev,odgovor)=>{
     })
 })
 
-server.post("/api/filmovi",(zahtjev,odgovor)=>{
+server.get("/api/film",(zahtjev,odgovor)=>{
+    const sql = "SELECT * FROM film";
+
+    baza.izvrsiUpit(sql,[])
+        .then((redovi)=>{
+            odgovor.json(redovi);
+        })
+        .catch((g)=>{
+            console.error("Greska pri citanju iz baze:", g.message);
+            odgovor.status(500).json({greska: "Ne mogu dohvatiti favorite"});
+        });
+});
+
+server.post("/api/film",(zahtjev,odgovor)=>{
     const film = zahtjev.body;
     console.log("Spremam film u favorite: ", film.naslov);
     const sql = `INSERT INTO film (tmdb_id, naslov, opis, putanja_slike, popularnost) 
                  VALUES (?, ?, ?, ?, ?)`;
     const podaci = [
-        film.id,
-        film.title,
-        film.overview,
-        film.poster_path,
-        film.popularity
+        film.tmdb_id,
+        film.naslov,
+        film.opis,
+        film.putanja_slike,
+        film.popularnost
     ];
 
     baza.izvrsiUpit(sql,podaci)

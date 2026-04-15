@@ -22,7 +22,7 @@ export class TmdbKlijent {
        }
 
        const resurs = `/search/movie?query=${encodeURIComponent(cistUpit)}&page=${stranica}&language=en-US&include_adult=false`;
-       const url = this.baznaPutanja + resurs + `&api_key${this.apiKljuc}`;
+       const url = this.baznaPutanja + resurs + `&api_key=${this.apiKljuc}`;
        const odgovor = await fetch(url);
        const podaci = await odgovor.json();
 
