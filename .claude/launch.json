@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "muvie",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.mjs", "podaci/konfiguracija.csv"],
+      "port": 12345
+    }
+  ]
+}

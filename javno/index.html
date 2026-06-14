@@ -3,34 +3,406 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Movie aplikacija</title>
+        <title>Muvie</title>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
         <style>
-            .card-img-top {height: 300px; object-fit: cover;}
-            .film-kartica {transition: transform 0.2s;}
-            .film-kartica:hover{transform: scale(1.02);}
+            :root {
+                --primary: #e50914;
+                --dark-bg: #141414;
+                --card-bg: #1e1e1e;
+            }
+
+            body {
+                background-color: #0f0f0f;
+                color: #e5e5e5;
+                font-family: 'Segoe UI', sans-serif;
+            }
+
+            /* ── Navbar ── */
+            .navbar {
+                background: linear-gradient(to bottom, rgba(0,0,0,0.95), rgba(0,0,0,0.6));
+                border-bottom: 1px solid #222;
+                padding: 0.75rem 0;
+            }
+            .navbar-brand {
+                font-size: 1.8rem;
+                font-weight: 800;
+                color: var(--primary) !important;
+                letter-spacing: -0.5px;
+            }
+
+            /* ── Hero ── */
+            .hero {
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+                padding: 4rem 0 3rem;
+                margin-bottom: 2.5rem;
+                border-bottom: 1px solid #222;
+                position: relative;
+                z-index: 10;
+            }
+            .hero h1 {
+                font-size: 2.4rem;
+                font-weight: 700;
+                color: #fff;
+            }
+            .hero p {
+                color: #aaa;
+                font-size: 1.1rem;
+            }
+            .search-wrapper {
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 12px;
+                padding: 1.25rem 1.5rem;
+                backdrop-filter: blur(10px);
+            }
+            #upit {
+                background: #1a1a1a;
+                border: 1px solid #333;
+                color: #fff;
+                border-radius: 8px;
+                padding: 0.7rem 1rem;
+            }
+            #upit:focus {
+                background: #222;
+                border-color: var(--primary);
+                color: #fff;
+                box-shadow: 0 0 0 3px rgba(229,9,20,0.2);
+            }
+            #upit::placeholder { color: #666; }
+
+            /* ── Sections ── */
+            .section-title {
+                font-size: 1.3rem;
+                font-weight: 700;
+                color: #fff;
+                margin-bottom: 1rem;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+            .section-title .badge {
+                font-size: 0.65rem;
+                padding: 0.3em 0.6em;
+            }
+
+            /* ── Film cards ── */
+            .film-card {
+                background: var(--card-bg);
+                border: 1px solid #2a2a2a;
+                border-radius: 10px;
+                overflow: hidden;
+                transition: transform 0.2s, border-color 0.2s;
+                height: 100%;
+            }
+            .film-card:hover {
+                transform: translateY(-4px);
+                border-color: #444;
+            }
+            .film-card img {
+                height: 240px;
+                object-fit: cover;
+                width: 100%;
+            }
+            .film-card .card-body {
+                padding: 0.75rem;
+            }
+            .film-card .card-title {
+                font-size: 0.9rem;
+                font-weight: 600;
+                color: #fff;
+                margin-bottom: 0.25rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .film-card .card-year {
+                font-size: 0.8rem;
+                color: #888;
+            }
+
+            /* Mini cards (Top 5, Najnovije) */
+            .film-card-mini img { height: 180px; }
+
+            /* ── Fav button ── */
+            .btn-fav {
+                background: var(--primary);
+                border: none;
+                color: #fff;
+                font-size: 0.78rem;
+                padding: 0.35rem 0.75rem;
+                border-radius: 6px;
+                width: 100%;
+                margin-top: 0.5rem;
+                transition: background 0.15s;
+            }
+            .btn-fav:hover { background: #c40812; color: #fff; }
+
+            /* ── Autocomplete ── */
+            #autocomplete-lista {
+                background: #1e1e1e;
+                border: 1px solid #333;
+                border-radius: 8px;
+                z-index: 1000;
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            #autocomplete-lista .list-group-item {
+                background: #1e1e1e;
+                border-color: #2a2a2a;
+                color: #e5e5e5;
+            }
+            #autocomplete-lista .list-group-item:hover {
+                background: #2a2a2a;
+            }
+
+            /* ── Modali ── */
+            .modal-content {
+                background: #1a1a1a;
+                border: 1px solid #333;
+                color: #e5e5e5;
+            }
+            .modal-header { border-bottom-color: #2a2a2a; }
+            .modal-footer { border-top-color: #2a2a2a; }
+            .form-control {
+                background: #111;
+                border-color: #333;
+                color: #e5e5e5;
+            }
+            .form-control:focus {
+                background: #1a1a1a;
+                border-color: var(--primary);
+                color: #fff;
+                box-shadow: 0 0 0 3px rgba(229,9,20,0.2);
+            }
+            .form-control::placeholder { color: #555; }
+            .form-label { color: #bbb; font-size: 0.9rem; }
+
+            /* ── Rezultati pretraživanja ── */
+            #rezultati-wrapper { min-height: 100px; }
+
+            /* ── Footer ── */
+            footer {
+                border-top: 1px solid #1a1a1a;
+                padding: 1.5rem 0;
+                color: #555;
+                font-size: 0.85rem;
+                text-align: center;
+                margin-top: 3rem;
+            }
         </style>
     </head>
-    <body class="bg-light">
-        <nav class="navbar navbar-dark bg-dark mb-4">
+    <body>
+
+        <!-- ═══ Navbar ═══ -->
+        <nav class="navbar navbar-dark sticky-top">
             <div class="container">
-                <span class="navbar-brand">Moja app</span>
-                <button class="btn btn-outline-warning" onclick="ucitajFavorite()">Moji Favoriti</button>
+                <span class="navbar-brand" style="cursor:pointer;" onclick="vratiNaPočetak()">🎬 Muvie</span>
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="ucitajFavorite()">
+                        <i class="bi bi-star-fill text-warning me-1"></i>Moji favoriti
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="pokreniKviz()">
+    <i class="bi bi-question-circle me-1"></i>Kviz
+</button>
+                    <button id="btn-prijava" type="button" class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#modal-prijava">
+                        <i class="bi bi-box-arrow-in-right me-1"></i>Prijava
+                    </button>
+                    <button id="btn-registracija" type="button" class="btn btn-sm" style="background:var(--primary);color:#fff;border:none;" data-bs-toggle="modal" data-bs-target="#modal-registracija">
+                        Registracija
+                    </button>
+                    <button id="btn-odjava" type="button" class="btn btn-outline-danger btn-sm d-none" onclick="odjaviKorisnika()">
+                        <i class="bi bi-box-arrow-right me-1"></i>Odjava
+                    </button>
+                </div>
             </div>
         </nav>
 
-        <div class="container">
-            <div class="row mb-4">
-                <div class="col-md-8 position-relative">
-                    <input type="text" id="upit" class="form-control" placeholder="Upiši naziv filma" autocomplete="off" oninput="autocompleteFilmove()">
-                    <div id="autocomplete-lista" class="list-group position-absolute w-100 shadow-lg start-0 top-100 mt-1" style="z-index: 1000; max-height: 320px; overflow-y: auto;"></div>
-                </div>
-                <div class="col-md-4">
-                    <button type="button" class="btn btn-primary w-100" onclick="pretraziFilmove()">Pronađi film</button>
+        <!-- ═══ Hero / Search ═══ -->
+        <div class="hero">
+            <div class="container text-center">
+                <h1>Pronađi svoj sljedeći omiljeni film</h1>
+                <p class="mb-4">Pretraži milijune filmova, spremi favorite i istraži što je popularno.</p>
+                <div class="search-wrapper mx-auto" style="max-width: 640px;">
+                    <div class="d-flex gap-2 position-relative">
+                        <div class="flex-grow-1 position-relative">
+                            <input type="text" id="upit" class="form-control form-control-lg"
+                                placeholder="Naziv filma..." autocomplete="off"
+                                oninput="autocompleteFilmove()"
+                                onkeydown="if(event.key==='Enter') pretraziFilmove()">
+                            <div id="autocomplete-lista" class="list-group position-absolute w-100 mt-1"></div>
+                        </div>
+                        <button type="button" class="btn btn-lg px-4 fw-bold" style="background:var(--primary);color:#fff;border:none;border-radius:8px;" onclick="pretraziFilmove()">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div id="rezultati" class="row"></div>
-            <script src="klijent.js"></script>
         </div>
+
+<!-- Kviz sekcija -->
+<div id="sekcija-kviz" class="d-none">
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="section-title mb-0">
+                <i class="bi bi-question-circle text-warning"></i> Filmski kviz
+                <span id="kviz-bodovi" class="badge bg-warning text-dark ms-2">0 bodova</span>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" onclick="vratiNaPočetak()">
+                ✕ Izlaz iz kviza
+            </button>
+        </div>
+
+        <div class="text-center mb-4">
+            <p class="text-muted">Pogodi koji je ovo film!</p>
+            <img id="kviz-slika" src="" style="height:360px;border-radius:12px;object-fit:cover;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        </div>
+
+        <div id="kviz-opcije" class="row g-3 justify-content-center mb-4" style="max-width:600px;margin:0 auto;"></div>
+
+        <div id="kviz-poruka" class="text-center fs-5 fw-bold mb-3" style="min-height:2rem;"></div>
+
+        <div class="text-center">
+            <button id="kviz-sljedeci" class="btn btn-lg text-white d-none" 
+                style="background:var(--primary);border:none;border-radius:8px;padding:0.6rem 2rem;"
+                onclick="sljedeciKvizFilm()">
+                Sljedeći film →
+            </button>
+        </div>
+    </div>
+</div>
+
+        <!-- ═══ Sadržaj ═══ -->
+        <div class="container">
+
+            <!-- Top 5 -->
+            <div class="mb-5" id="sekcija-top5">
+                <div class="section-title">
+                    <i class="bi bi-fire text-danger"></i> Top 5 za vas
+                    <span class="badge bg-danger">Popularno</span>
+                </div>
+                <div id="pocetna-top5" class="row g-3"></div>
+            </div>
+
+            <!-- Najnovije -->
+            <div class="mb-5" id="sekcija-najnovije">
+                <div class="section-title">
+                    <i class="bi bi-stars text-warning"></i> Najnoviji filmovi
+                </div>
+                <div id="pocetna-najnovije" class="row g-3"></div>
+            </div>
+
+            <!-- Rezultati pretrage / favoriti -->
+            <div id="rezultati-wrapper">
+                <div id="rezultati" class="row g-3"></div>
+            </div>
+
+        </div>
+
+        <!-- ═══ Footer ═══ -->
+        <footer>
+            <div class="container">
+                Muvie &copy; 2024 &nbsp;·&nbsp; Podatci preuzeti s <a href="https://www.themoviedb.org/" class="text-secondary" target="_blank">TMDB</a>
+            </div>
+        </footer>
+
+        <!-- ═══ Modal: Registracija ═══ -->
+        <div class="modal fade" id="modal-registracija" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title fw-bold">Registracija</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label class="form-label" for="reg-ime">Ime</label>
+                                <input type="text" id="reg-ime" class="form-control" placeholder="Ime">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label" for="reg-prezime">Prezime</label>
+                                <input type="text" id="reg-prezime" class="form-control" placeholder="Prezime">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="reg-korime">Korisničko ime</label>
+                                <input type="text" id="reg-korime" class="form-control" placeholder="korime123">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="reg-email">Email</label>
+                                <input type="email" id="reg-email" class="form-control" placeholder="mail@primjer.hr">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="reg-lozinka">Lozinka</label>
+                                <input type="password" id="reg-lozinka" class="form-control" placeholder="••••••••">
+                            </div>
+                        </div>
+                        <div id="poruka-registracije" class="mt-3"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Odustani</button>
+                        <button type="button" class="btn text-white fw-bold" style="background:var(--primary);border:none;" onclick="registrirajKorisnika()">
+                            Registriraj se
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ Modal: Prijava ═══ -->
+        <div class="modal fade" id="modal-prijava" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title fw-bold">Prijava</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="login-korime">Korisničko ime</label>
+                            <input type="text" id="login-korime" class="form-control" placeholder="korime123">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="login-lozinka">Lozinka</label>
+                            <input type="password" id="login-lozinka" class="form-control" placeholder="••••••••">
+                        </div>
+                        <div id="poruka-prijave" class="mt-2"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Odustani</button>
+                        <button type="button" class="btn btn-primary fw-bold" onclick="prijaviKorisnika()">
+                            Prijavi se
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Detalji filma -->
+        <div class="modal fade" id="modal-film" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title fw-bold" id="modal-film-naslov">—</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body d-flex gap-4">
+                        <img id="modal-film-slika" src="" style="width:160px;height:240px;object-fit:cover;border-radius:8px;flex-shrink:0;">
+                        <div>
+                            <p class="text-muted small mb-1" id="modal-film-godina"></p>
+                            <p id="modal-film-opis" style="color:#ccc;font-size:0.95rem;"></p>
+                            <p><span class="badge bg-warning text-dark">⭐ <span id="modal-film-ocjena"></span></span></p>
+                            <button class="btn-fav mt-2" id="modal-film-btn">
+                                <i class="bi bi-star me-1"></i>Dodaj u favorite
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script type="module" src="klijent.js"></script>
     </body>
 </html>

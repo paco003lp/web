@@ -2,24 +2,194 @@
 const SLIKA_NEMA_POSTERA =
     "data:image/svg+xml," +
     encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="750"><rect fill="#e9ecef" width="100%" height="100%"/><text x="50%" y="48%" dominant-baseline="middle" text-anchor="middle" fill="#adb5bd" font-family="sans-serif" font-size="22">Nema slike</text></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="750"><rect fill="#1e1e1e" width="100%" height="100%"/><text x="50%" y="48%" dominant-baseline="middle" text-anchor="middle" fill="#555" font-family="sans-serif" font-size="22">Nema slike</text></svg>'
     );
 const SLIKA_NEMA_POSTERA_MALA =
     "data:image/svg+xml," +
     encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="138"><rect fill="#dee2e6" width="100%" height="100%"/></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="138"><rect fill="#1e1e1e" width="100%" height="100%"/></svg>'
     );
+
+// Globalna mapa filmova — tmdb_id → film objekt, izbjegava inline JSON u onclick
+const _filmovi = new Map();
+
+function ocistiVrijednosti(ids) {
+    ids.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+    });
+}
+
+function zatvoriModal(modalId) {
+    const el = document.getElementById(modalId);
+    if (!el) return;
+
+    // bootstrap bundle je učitan globalno u index.html
+    const inst =
+        window.bootstrap?.Modal?.getInstance(el) || new window.bootstrap.Modal(el);
+    inst.hide();
+}
+
+async function procitajJsonSigurno(odgovor) {
+    try {
+        return await odgovor.json();
+    } catch {
+        return null;
+    }
+}
+
+async function osvjeziAuthUI() {
+    try {
+        const res = await fetch("/api/prijava");
+        const stanje = await procitajJsonSigurno(res);
+        const logiran = !!stanje?.logiran;
+
+        const btnPrijava = document.getElementById("btn-prijava");
+        const btnRegistracija = document.getElementById("btn-registracija");
+        const btnOdjava = document.getElementById("btn-odjava");
+
+        if (btnPrijava) btnPrijava.classList.toggle("d-none", logiran);
+        if (btnRegistracija) btnRegistracija.classList.toggle("d-none", logiran);
+        if (btnOdjava) btnOdjava.classList.toggle("d-none", !logiran);
+    } catch {
+        // Ako server nije dostupan, samo ostavimo default UI.
+    }
+}
+
+function karticaFilmMini(film) {
+    const naslov = escapeHtml(film?.title || "Nepoznat naslov");
+    const godina = film?.release_date ? film.release_date.split("-")[0] : "";
+    const slika = film?.poster_path
+        ? `https://image.tmdb.org/t/p/w342${film.poster_path}`
+        : SLIKA_NEMA_POSTERA;
+    const id = film?.id;
+    if (id) _filmovi.set(id, film);
+
+    return `
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+            <div class="film-card film-card-mini">
+                <img src="${slika}" alt="${naslov}" style="cursor:pointer;" onclick="otvoriDetalje(${id})" onerror="this.onerror=null;this.src='${SLIKA_NEMA_POSTERA}'">
+                <div class="card-body">
+                    <div class="card-title" style="cursor:pointer;" onclick="otvoriDetalje(${id})">${naslov}</div>
+                    <div class="card-year">${godina}</div>
+                    ${id ? `<button class="btn-fav" onclick="dodajUFavorite(${id})"><i class="bi bi-star me-1"></i>Favorit</button>` : ""}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function ucitajPocetnu() {
+    const top5El = document.getElementById("pocetna-top5");
+    const najnovijeEl = document.getElementById("pocetna-najnovije");
+    if (!top5El || !najnovijeEl) return;
+
+    try {
+        const res = await fetch("/api/tmdb/pocetna");
+        const data = await procitajJsonSigurno(res);
+        if (!res.ok) throw new Error(data?.greska || "Ne mogu učitati početnu.");
+
+        top5El.innerHTML = (data.top5 || []).map(karticaFilmMini).join("");
+        najnovijeEl.innerHTML = (data.najnovije || []).map(karticaFilmMini).join("");
+    } catch (e) {
+        top5El.innerHTML = `<div class="col-12 text-muted">Ne mogu dohvatiti preporuke.</div>`;
+        najnovijeEl.innerHTML = `<div class="col-12 text-muted">Ne mogu dohvatiti najnovije filmove.</div>`;
+    }
+}
+
+async function odjaviKorisnika() {
+    await fetch("/api/odjava");
+    const porukaPrijave = document.getElementById("poruka-prijave");
+    const porukaReg = document.getElementById("poruka-registracije");
+    if (porukaPrijave) porukaPrijave.innerHTML = "";
+    if (porukaReg) porukaReg.innerHTML = "";
+    await osvjeziAuthUI();
+}
+
+async function registrirajKorisnika() {
+    const poruka = document.getElementById("poruka-registracije");
+    if (poruka) poruka.innerHTML = "";
+
+    const podaci = {
+        ime: document.getElementById("reg-ime").value,
+        prezime: document.getElementById("reg-prezime").value,
+        korime: document.getElementById("reg-korime").value,
+        email: document.getElementById("reg-email").value,
+        lozinka: document.getElementById("reg-lozinka").value,
+    };
+    const odgovor = await fetch("/api/korisnici", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(podaci),
+    });
+    const rezultat = await procitajJsonSigurno(odgovor);
+    if (odgovor.ok) {
+        ocistiVrijednosti([
+            "reg-ime",
+            "reg-prezime",
+            "reg-korime",
+            "reg-email",
+            "reg-lozinka",
+        ]);
+        zatvoriModal("modal-registracija");
+        await osvjeziAuthUI();
+    } else {
+        const greska = rezultat?.greska || "Registracija nije uspjela.";
+        if (poruka) poruka.innerHTML = `<div class="text-danger">${greska}</div>`;
+    }
+}
+
+async function prijaviKorisnika() {
+    const korime = document.getElementById("login-korime").value;
+    const lozinka = document.getElementById("login-lozinka").value;
+
+    const odgovor = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ korime, lozinka }),
+    });
+    const rezultat = await procitajJsonSigurno(odgovor);
+    const porukaDiv = document.getElementById("poruka-prijave");
+
+    if (odgovor.ok) {
+        if (porukaDiv) porukaDiv.innerHTML = `<p class="text-success">Dobrodošli, ${escapeHtml(korime)}!</p>`;
+        ocistiVrijednosti(["login-korime", "login-lozinka"]);
+        zatvoriModal("modal-prijava");
+        await osvjeziAuthUI();
+    } else {
+        const greska = rezultat?.greska || "Neuspješna prijava.";
+        if (porukaDiv) porukaDiv.innerHTML = `<p class="text-danger">${greska}</p>`;
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    osvjeziAuthUI();
+    ucitajPocetnu();
+});
+
 
 async function pretraziFilmove() {
     const upit = document.getElementById("upit").value;
     const kontejner = document.getElementById("rezultati");
 
     if (!upit) {
-        alert("Upiši naziv filma!");
+        prikaziObavijest("Upiši naziv filma!", "warning");
         return;
     }
 
-    kontejner.innerHTML = '<div class="text-center col-12"><h4>Tražim...</h4></div>';
+    document.getElementById("sekcija-top5")?.classList.add("d-none");
+    document.getElementById("sekcija-najnovije")?.classList.add("d-none");
+
+    let naslov = document.getElementById("rezultati-naslov");
+    if (!naslov) {
+        naslov = document.createElement("div");
+        naslov.id = "rezultati-naslov";
+        naslov.className = "section-title mb-3";
+        kontejner.parentElement.insertBefore(naslov, kontejner);
+    }
+    naslov.innerHTML = `<i class="bi bi-search"></i> Rezultati za: <em style="color:#aaa;">${escapeHtml(upit)}</em>`;
+
+    kontejner.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-danger"></div></div>';
 
     try {
         const odgovor = await fetch(`/api/tmdb/film?upit=${encodeURIComponent(upit)}`);
@@ -34,22 +204,24 @@ async function pretraziFilmove() {
 
         kontejner.innerHTML = "";
 
+        kontejner.innerHTML = "";
         filmovi.forEach(film => {
-            const naslov = film.title || film.naslov || "Nepoznat naslov";
+            const naslov = escapeHtml(film.title || film.naslov || "Nepoznat naslov");
+            const godina = film.release_date ? film.release_date.split("-")[0] : "";
             const slika = film.poster_path
                 ? `https://image.tmdb.org/t/p/w500${film.poster_path}`
                 : SLIKA_NEMA_POSTERA;
+            if (film.id) _filmovi.set(film.id, film);
 
             const kartica = `
-                <div class="col-md-3 mb-4">
-                    <div class="card h-100 shadow-sm">
-                        <img src="${slika}" class="card-img-top" alt="${naslov}" onerror="this.onerror=null;this.src='${SLIKA_NEMA_POSTERA}'">
-                        <div class="card-body d-flex flex-column">
-                            <h5 class="card-title">${naslov}</h5>
-                            <p class="card-text text-muted small">${film.release_date || ''}</p>
-                            <button class="btn btn-success btn-sm mt-auto" 
-                                onclick='dodajUFavorite(${JSON.stringify(film).replace(/'/g, "&apos;")})'>
-                                ⭐ Favorit
+                <div class="col-6 col-md-4 col-lg-3">
+                    <div class="film-card">
+                        <img src="${slika}" alt="${naslov}" style="cursor:pointer;" onclick="otvoriDetalje(${film.id})" onerror="this.onerror=null;this.src='${SLIKA_NEMA_POSTERA}'">
+                        <div class="card-body">
+                            <div class="card-title" style="cursor:pointer;" onclick="otvoriDetalje(${film.id})">${naslov}</div>
+                            <div class="card-year">${godina}</div>
+                            <button class="btn-fav" onclick="dodajUFavorite(${film.id})">
+                                <i class="bi bi-star me-1"></i>Favorit
                             </button>
                         </div>
                     </div>
@@ -135,7 +307,12 @@ document.addEventListener("click", function (e) {
     document.getElementById("autocomplete-lista").innerHTML = "";
 });
 
-async function dodajUFavorite(film) {
+async function dodajUFavorite(tmdbId) {
+    const film = _filmovi.get(tmdbId);
+    if (!film) {
+        alert("Film nije pronađen.");
+        return;
+    }
     try {
         const odgovor = await fetch("/api/film", {
             method: "POST",
@@ -149,41 +326,99 @@ async function dodajUFavorite(film) {
             })
         });
 
-        if (odgovor.ok) alert("Spremljeno!");
-        else alert("Već postoji ili greška.");
+        if (odgovor.ok) {
+            prikaziObavijest("Film dodan u favorite!", "success");
+            return;
+        }
+
+        const data = await procitajJsonSigurno(odgovor);
+        if (odgovor.status === 401) {
+            // Zatvori detalje pa otvori prijavu
+            const modalFilm = window.bootstrap.Modal.getInstance(document.getElementById("modal-film"));
+            if (modalFilm) {
+                modalFilm.hide();
+                document.getElementById("modal-film").addEventListener("hidden.bs.modal", () => {
+                    new window.bootstrap.Modal(document.getElementById("modal-prijava")).show();
+                }, { once: true });
+            } else {
+                new window.bootstrap.Modal(document.getElementById("modal-prijava")).show();
+            }
+            return;
+        }
+        if (odgovor.status === 409) {
+            prikaziObavijest("Film je već u favoritima.", "warning");
+            return;
+        }
+        prikaziObavijest(data?.greska || "Greška pri spremanju.", "danger");
     } catch (e) {
         console.error(e);
     }
 }
 
+function prikaziObavijest(tekst, tip = "success") {
+    const div = document.createElement("div");
+    div.className = `alert alert-${tip} alert-dismissible position-fixed bottom-0 end-0 m-3 shadow`;
+    div.style.zIndex = "9999";
+    div.innerHTML = `${tekst}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3500);
+}
+
 async function ucitajFavorite() {
+    document.getElementById("sekcija-top5")?.classList.add("d-none");
+    document.getElementById("sekcija-najnovije")?.classList.add("d-none");
     const rez = document.getElementById("rezultati");
-    rez.innerHTML = "<div class='col-12'><h4>Učitavam tvoje favorite...</h4></div>";
+
+    const naslov = document.getElementById("rezultati-naslov");
+    if (!naslov) {
+        const h = document.createElement("div");
+        h.id = "rezultati-naslov";
+        h.className = "section-title mb-3";
+        h.innerHTML = '<i class="bi bi-star-fill text-warning"></i> Moji favoriti';
+        rez.parentElement.insertBefore(h, rez);
+    }
+
+    rez.innerHTML = "<div class='col-12 text-center py-4'><div class='spinner-border text-danger'></div></div>";
 
     try{
         const odgovor = await fetch("/api/film");
-        const favoriti = await odgovor.json();
+        const favoriti = await procitajJsonSigurno(odgovor);
+        if (!odgovor.ok) {
+            if (odgovor.status === 401) {
+                rez.innerHTML = "<div class='alert alert-warning col-12'>Prijavi se da vidiš svoje favorite.</div>";
+                const el = document.getElementById("modal-prijava");
+                if (el) new window.bootstrap.Modal(el).show();
+                return;
+            }
+            rez.innerHTML = "<div class='alert alert-danger col-12'>Ne mogu dohvatiti favorite.</div>";
+            return;
+        }
 
         rez.innerHTML = "";
 
-        if(favoriti.length === 0){
+        if(!Array.isArray(favoriti) || favoriti.length === 0){
             rez.innerHTML = "<div class='alert alert-info col-12'>Nemaš još nijedan favorit!</div>";
             return;
         }
 
-        favoriti.forEach(film =>{
+        rez.innerHTML = "";
+        favoriti.forEach(film => {
             const slikaURL = film.putanja_slike
                 ? `https://image.tmdb.org/t/p/w500${film.putanja_slike}`
                 : SLIKA_NEMA_POSTERA;
+            const opis = film.opis ? escapeHtml(film.opis).substring(0, 100) + "…" : "";
 
             rez.innerHTML += `
-                <div class="col-md-3 mb-4">
-                    <div class="card h-100 border-warning shadow">
-                        <img src="${slikaURL}" class="card-img-top" onerror="this.onerror=null;this.src='${SLIKA_NEMA_POSTERA}'">
+                <div class="col-6 col-md-4 col-lg-3">
+                    <div class="film-card" style="border-color:#f5c518;">
+                        <img src="${slikaURL}" onerror="this.onerror=null;this.src='${SLIKA_NEMA_POSTERA}'">
                         <div class="card-body">
-                            <h5 class="card-title">${film.naslov}</h5>
-                            <p class="card-text small text-muted">${film.opis.substring(0, 100)}...</p>
-                            <span class="badge bg-primary">Popularnost: ${film.popularnost}</span>
+                            <div class="card-title">${escapeHtml(film.naslov)}</div>
+                            <div class="card-year text-warning"><i class="bi bi-star-fill me-1"></i>Favorit</div>
+<button class="btn-fav mt-1" style="background:#555;" onclick="ukloniIzFavorita(${film.tmdb_id})">
+    <i class="bi bi-trash me-1"></i>Ukloni
+</button>
+                            ${opis ? `<p class="small mt-1" style="color:#888;font-size:0.78rem;">${opis}</p>` : ""}
                         </div>
                     </div>
                 </div>
@@ -194,3 +429,53 @@ async function ucitajFavorite() {
         rez.innerHTML ="<div class='alert alert-danger col-12'>Došlo je do greške pri dohvaćanju.</div>";
     }
 }
+
+async function ukloniIzFavorita(tmdb_id) {
+    const odgovor = await fetch(`/api/film/${tmdb_id}`, {method: "DELETE"});
+    if(odgovor.ok){
+        prikaziObavijest("Film uklonjen iz favorita.","warning");
+        await ucitajFavorite();
+    }else{
+        prikaziObavijest("Ne mogu ukloniti film iz favorita.","danger");
+    }
+    
+}
+
+function otvoriDetalje(tmdbId) {
+    const film = _filmovi.get(tmdbId);
+    if (!film) return;
+
+    document.getElementById("modal-film-naslov").textContent = film.title || "—";
+    document.getElementById("modal-film-godina").textContent = film.release_date ? film.release_date.split("-")[0] : "";
+    document.getElementById("modal-film-opis").textContent = film.overview || "Nema opisa.";
+    document.getElementById("modal-film-ocjena").textContent = film.vote_average?.toFixed(1) || "N/A";
+    document.getElementById("modal-film-slika").src = film.poster_path
+        ? `https://image.tmdb.org/t/p/w342${film.poster_path}`
+        : SLIKA_NEMA_POSTERA;
+    document.getElementById("modal-film-btn").onclick = () => dodajUFavorite(tmdbId);
+
+    new window.bootstrap.Modal(document.getElementById("modal-film")).show();
+}
+
+function vratiNaPočetak() {
+    document.getElementById("rezultati").innerHTML = "";
+    document.getElementById("rezultati-naslov")?.remove();
+    document.getElementById("upit").value = "";
+    document.getElementById("autocomplete-lista").innerHTML = "";
+    document.getElementById("sekcija-top5")?.classList.remove("d-none");
+    document.getElementById("sekcija-najnovije")?.classList.remove("d-none");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// Izlaganje funkcija globalnom objektu window
+window.registrirajKorisnika = registrirajKorisnika;
+window.prijaviKorisnika = prijaviKorisnika;
+window.odjaviKorisnika = odjaviKorisnika;
+window.pretraziFilmove = pretraziFilmove;
+window.autocompleteFilmove = autocompleteFilmove;
+window.ucitajFavorite = ucitajFavorite;
+window.dodajUFavorite = dodajUFavorite;
+window.odaberiIzAutocomplete = odaberiIzAutocomplete;
+window.ukloniIzFavorita = ukloniIzFavorita;
+window.otvoriDetalje = otvoriDetalje;
+window.vratiNaPočetak = vratiNaPočetak;

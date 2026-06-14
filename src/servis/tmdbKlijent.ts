@@ -31,4 +31,22 @@ export class TmdbKlijent {
        }
        return podaci;
     }
+
+    async dohvatiPopularno(stranica: number = 1) {
+        const resurs = `/trending/movie/week?page=${stranica}&language=en-US`;
+        const url = this.baznaPutanja + resurs + `&api_key=${this.apiKljuc}`;
+        const odgovor = await fetch(url);
+        const podaci = await odgovor.json();
+        if (!odgovor.ok) throw new Error(podaci?.status_message || "Greska pri dohvatu popularnih filmova");
+        return podaci;
+    }
+
+    async dohvatiNajnovije(stranica: number = 1) {
+        const resurs = `/movie/now_playing?page=${stranica}&language=en-US`;
+        const url = this.baznaPutanja + resurs + `&api_key=${this.apiKljuc}`;
+        const odgovor = await fetch(url);
+        const podaci = await odgovor.json();
+        if (!odgovor.ok) throw new Error(podaci?.status_message || "Greska pri dohvatu najnovijih filmova");
+        return podaci;
+    }
 }
